@@ -1,0 +1,5 @@
+# Copyright (c) 2025 Sergey Golovin <golovinengineer@icloud.com>
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_FPCAN
+	select SOC_STM32F405XX

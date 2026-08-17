@@ -1,0 +1,6 @@
+board:
+  name: fpcan
+  full_name: FPCAN
+  vendor: rhs
+  socs:
+    - name: stm32f405xx

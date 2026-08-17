@@ -1,0 +1,19 @@
+identifier: fpcan
+name: Robotics Hardware Solutions FPCAN board
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+ram: 128
+flash: 1024
+supported:
+  - counter
+  - spi
+  - i2c
+  - uart
+  - can
+  - gpio
+  - watchdog
+  - backup_sram
+vendor: rhs
