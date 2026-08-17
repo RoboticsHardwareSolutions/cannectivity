@@ -58,6 +58,18 @@ config USBD_GS_USB_TERMINATION
 	help
 	  Enable support for software-controlled CAN termination resistors.
 
+config USBD_GS_USB_MAX_IN_FLIGHT
+	int "Maximum number of bulk IN transfers in flight"
+	default 4
+	range 1 USBD_GS_USB_POOL_SIZE
+	help
+	  Maximum number of bulk IN (RX host frame) transfers the internal RX
+	  thread will submit to the USB device controller before waiting for a
+	  completion. Values above 1 allow more than one CAN frame to be in
+	  flight on the wire at a time instead of serializing on a full USB
+	  round trip per frame, at the cost of holding that many buffers out of
+	  the shared host frame buffer pool simultaneously.
+
 config USBD_GS_USB_RX_THREAD_STACK_SIZE
 	int "Stack size for the RX thread"
 	default 1024

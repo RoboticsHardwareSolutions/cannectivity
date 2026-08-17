@@ -277,26 +277,22 @@ USBD_DESC_BOS_DEFINE(usbext, sizeof(bos_cap_lpm), &bos_cap_lpm);
 
 static void const *pcannectivity_msosv2_descriptor = &cannectivity_msosv2_descriptor;
 
-static struct net_buf *cannectivity_usb_msosv2_handler(const struct usbd_context *const ctx,
-						       const struct usb_setup_packet *const setup)
+static int cannectivity_usb_msosv2_handler(const struct usbd_context *const ctx,
+					    const struct usb_setup_packet *const setup,
+					    struct net_buf *const buf)
 {
-	struct net_buf *buf;
 	uint16_t len;
 
 	if (setup->bRequest == GS_USB_MS_VENDORCODE && setup->wIndex == MS_OS_20_DESCRIPTOR_INDEX) {
 		len = MIN(setup->wLength, bos_cap_msosv2.cap.wMSOSDescriptorSetTotalLength);
-
-		buf = usbd_ep_ctrl_data_in_alloc(ctx, len);
-		if (buf == NULL) {
-			return NULL;
-		}
+		len = MIN(len, net_buf_tailroom(buf));
 
 		net_buf_add_mem(buf, pcannectivity_msosv2_descriptor, len);
 
-		return buf;
+		return 0;
 	}
 
-	return NULL;
+	return -ENOTSUP;
 }
 
 USBD_DESC_BOS_VREQ_DEFINE(msosv2, sizeof(bos_cap_msosv2), &bos_cap_msosv2,

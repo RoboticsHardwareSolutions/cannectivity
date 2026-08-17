@@ -20,3 +20,6 @@ manifest:
           - mcuboot
           - net-tools
           - segger
+build:
+  settings:
+    board_root: .
