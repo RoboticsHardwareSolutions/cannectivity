@@ -53,7 +53,6 @@ struct gs_usb_config {
 };
 
 struct gs_usb_channel_data {
-	struct can_state_change_callback state_change_callback;
 	const struct device *dev;
 	struct k_sem rx_overflows;
 	atomic_t rx_drops;
@@ -988,12 +987,11 @@ static int gs_usb_out_start(struct usbd_class_data *const c_data, uint8_t ep)
 }
 
 static void gs_usb_can_state_change_callback_handler(const struct device *can_dev,
-						     struct can_state_change_callback *callback,
 						     enum can_state state,
-						     struct can_bus_err_cnt err_cnt)
+						     struct can_bus_err_cnt err_cnt,
+						     void *user_data)
 {
-	struct gs_usb_channel_data *channel = CONTAINER_OF(callback, struct gs_usb_channel_data,
-							   state_change_callback);
+	struct gs_usb_channel_data *channel = user_data;
 	struct gs_usb_data *data = CONTAINER_OF(channel, struct gs_usb_data, channels[channel->ch]);
 	const struct gs_usb_config *config = data->dev->config;
 	uint32_t can_id = GS_USB_CAN_ID_FLAG_ERR;
@@ -1623,14 +1621,7 @@ static int gs_usb_register_channel(struct gs_usb_channel_data *channel, uint16_t
 		}
 	}
 
-	can_init_state_change_callback(&channel->state_change_callback,
-				       gs_usb_can_state_change_callback_handler);
-
-	err = can_add_state_change_callback(can_dev, &channel->state_change_callback);
-	if (err != 0) {
-		LOG_ERR("failed to add state change callback for channel %d (err %d)", ch, err);
-		return err;
-	}
+	can_set_state_change_callback(can_dev, gs_usb_can_state_change_callback_handler, channel);
 
 	channel->ch = ch;
 	channel->dev = can_dev;
@@ -1676,19 +1667,19 @@ int gs_usb_register(const struct device *dev, const struct device **channels, si
 	return 0;
 }
 
-static const void *gs_usb_get_desc(struct usbd_class_data *const c_data,
-				   const enum usbd_speed speed)
+static void *gs_usb_get_desc(struct usbd_class_data *const c_data,
+			     const enum usbd_speed speed)
 {
 	const struct device *dev = usbd_class_get_private(c_data);
 	const struct gs_usb_config *config = dev->config;
 
 #if USBD_SUPPORTS_HIGH_SPEED
 	if (speed == USBD_SPEED_HS) {
-		return config->hs_desc;
+		return (void *)config->hs_desc;
 	}
 #endif /* USBD_SUPPORTS_HIGH_SPEED */
 
-	return config->fs_desc;
+	return (void *)config->fs_desc;
 }
 
 static int gs_usb_preinit(const struct device *dev)
