@@ -40,19 +40,20 @@ struct gs_usb_desc {
 #if USBD_SUPPORTS_HIGH_SPEED
 	struct usb_ep_descriptor if0_hs_out2_ep;
 #endif /* USBD_SUPPORTS_HIGH_SPEED */
-	struct usb_desc_header nil_desc;
+	const struct usb_desc_header nil_desc;
 };
 
 struct gs_usb_config {
 	struct gs_usb_desc *desc;
 	struct usbd_class_data *c_data;
-	const struct usb_desc_header **fs_desc;
-	const struct usb_desc_header **hs_desc;
+	const struct usb_desc_header *const *const fs_desc;
+	const struct usb_desc_header *const *const hs_desc;
 	struct net_buf_pool *pool;
 	struct usbd_desc_node *if0_str_desc;
 };
 
 struct gs_usb_channel_data {
+	struct can_state_change_callback state_change_callback;
 	const struct device *dev;
 	struct k_sem rx_overflows;
 	atomic_t rx_drops;
@@ -986,10 +987,13 @@ static int gs_usb_out_start(struct usbd_class_data *const c_data, uint8_t ep)
 	return  ret;
 }
 
-static void gs_usb_can_state_change_callback(const struct device *can_dev, enum can_state state,
-					     struct can_bus_err_cnt err_cnt, void *user_data)
+static void gs_usb_can_state_change_callback_handler(const struct device *can_dev,
+						     struct can_state_change_callback *callback,
+						     enum can_state state,
+						     struct can_bus_err_cnt err_cnt)
 {
-	struct gs_usb_channel_data *channel = user_data;
+	struct gs_usb_channel_data *channel = CONTAINER_OF(callback, struct gs_usb_channel_data,
+							   state_change_callback);
 	struct gs_usb_data *data = CONTAINER_OF(channel, struct gs_usb_data, channels[channel->ch]);
 	const struct gs_usb_config *config = data->dev->config;
 	uint32_t can_id = GS_USB_CAN_ID_FLAG_ERR;
@@ -1606,20 +1610,27 @@ static int gs_usb_register_channel(struct gs_usb_channel_data *channel, uint16_t
 	}
 
 	err = can_get_capabilities(can_dev, &caps);
-	if (err != 0U) {
+	if (err != 0) {
 		LOG_ERR("failed to get capabilities for channel %u (err %d)", ch, err);
 		return err;
 	}
 
 	for (i = 0; i < ARRAY_SIZE(filters); i++) {
 		err = can_add_rx_filter(can_dev, gs_usb_can_rx_callback, channel, &filters[i]);
-		if (err < 0U) {
+		if (err < 0) {
 			LOG_ERR("failed to add filter %d to channel %d (err %d)", i, ch, err);
 			return err;
 		}
 	}
 
-	can_set_state_change_callback(can_dev, gs_usb_can_state_change_callback, channel);
+	can_init_state_change_callback(&channel->state_change_callback,
+				       gs_usb_can_state_change_callback_handler);
+
+	err = can_add_state_change_callback(can_dev, &channel->state_change_callback);
+	if (err != 0) {
+		LOG_ERR("failed to add state change callback for channel %d (err %d)", ch, err);
+		return err;
+	}
 
 	channel->ch = ch;
 	channel->dev = can_dev;
@@ -1665,7 +1676,8 @@ int gs_usb_register(const struct device *dev, const struct device **channels, si
 	return 0;
 }
 
-static void *gs_usb_get_desc(struct usbd_class_data *const c_data, const enum usbd_speed speed)
+static const void *gs_usb_get_desc(struct usbd_class_data *const c_data,
+				   const enum usbd_speed speed)
 {
 	const struct device *dev = usbd_class_get_private(c_data);
 	const struct gs_usb_config *config = dev->config;
@@ -1746,7 +1758,7 @@ static const struct usbd_cctx_vendor_req gs_usb_vendor_requests =
 			GS_USB_REQUEST_GET_STATE);
 /* clang-format on */
 
-struct usbd_class_api gs_usb_api = {
+static const struct usbd_class_api gs_usb_api = {
 	.control_to_dev = gs_usb_control_to_dev,
 	.control_to_host = gs_usb_control_to_host,
 	.request = gs_usb_request,
@@ -1830,7 +1842,7 @@ struct usbd_class_api gs_usb_api = {
 		},                                                                                 \
 	};                                                                                         \
                                                                                                    \
-	static const struct usb_desc_header *gs_usb_fs_desc_##n[] = {                              \
+	static const struct usb_desc_header *const gs_usb_fs_desc_##n[] = {                        \
 		(struct usb_desc_header *)&gs_usb_desc_##n.if0,                                    \
 		(struct usb_desc_header *)&gs_usb_desc_##n.if0_in_ep,                              \
 		IF_ENABLED(CONFIG_USBD_GS_USB_COMPATIBILITY_MODE, (                                \
@@ -1840,7 +1852,7 @@ struct usbd_class_api gs_usb_api = {
 	};                                                                                         \
                                                                                                    \
 	IF_ENABLED(USBD_SUPPORTS_HIGH_SPEED, (                                                     \
-	static const struct usb_desc_header *gs_usb_hs_desc_##n[] = {                              \
+	static const struct usb_desc_header *const gs_usb_hs_desc_##n[] = {                        \
 		(struct usb_desc_header *)&gs_usb_desc_##n.if0,                                    \
 		(struct usb_desc_header *)&gs_usb_desc_##n.if0_hs_in_ep,                           \
 		IF_ENABLED(CONFIG_USBD_GS_USB_COMPATIBILITY_MODE, (                                \
